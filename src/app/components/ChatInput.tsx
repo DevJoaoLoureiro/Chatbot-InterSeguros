@@ -1,21 +1,36 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import {
+  FormEvent,
+  useRef,
+  useState,
+} from "react";
 
 interface ChatInputProps {
-  placeholder?: string;
+  placeholder: string;
   disabled?: boolean;
+  inputMode?: "text" | "tel";
+  autoComplete?: string;
+  onFocus?: () => void;
   onSend: (value: string) => void;
 }
 
 export default function ChatInput({
-  placeholder = "Escreva a sua resposta...",
+  placeholder,
   disabled = false,
+  inputMode = "text",
+  autoComplete = "off",
+  onFocus,
   onSend,
 }: ChatInputProps) {
   const [value, setValue] = useState("");
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  const inputRef =
+    useRef<HTMLInputElement | null>(null);
+
+  function handleSubmit(
+    event: FormEvent<HTMLFormElement>,
+  ) {
     event.preventDefault();
 
     const trimmedValue = value.trim();
@@ -26,24 +41,58 @@ export default function ChatInput({
 
     onSend(trimmedValue);
     setValue("");
+
+    /*
+     * Mantém o input ativo entre perguntas.
+     * O timeout espera o React atualizar o estado.
+     */
+    window.setTimeout(() => {
+      inputRef.current?.focus({
+        preventScroll: true,
+      });
+
+      onFocus?.();
+    }, 100);
+  }
+
+  function handleFocus() {
+    onFocus?.();
   }
 
   return (
-    <form className="chat-input-form" onSubmit={handleSubmit}>
+    <form
+      className="chat-input-form"
+      onSubmit={handleSubmit}
+    >
       <input
+        ref={inputRef}
         className="chat-input"
-        type="text"
+        type={
+          inputMode === "tel"
+            ? "tel"
+            : "text"
+        }
+        inputMode={inputMode}
+        autoComplete={autoComplete}
+        enterKeyHint="send"
         value={value}
         placeholder={placeholder}
         disabled={disabled}
-        autoComplete="off"
-        onChange={(event) => setValue(event.target.value)}
+        maxLength={100}
+        aria-label={placeholder}
+        onFocus={handleFocus}
+        onChange={(event) => {
+          setValue(event.target.value);
+        }}
       />
 
       <button
         className="send-button"
         type="submit"
-        disabled={disabled || !value.trim()}
+        disabled={
+          disabled ||
+          value.trim().length === 0
+        }
       >
         Enviar
       </button>
