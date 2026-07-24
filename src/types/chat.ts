@@ -28,8 +28,9 @@ export interface ChatMessage {
 export interface LeadData {
   insuranceType: InsuranceType | "";
   registration: string;
+  name: string;
   contact: string;
-  name:string;
+  website?: string;
 }
 
 export interface LeadRequest {

@@ -113,15 +113,16 @@ export function useChat() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          insuranceType: data.insuranceType,
-          registration:
-            data.insuranceType === "Automóvel"
-              ? data.registration
-              : undefined,
-          contact: data.contact,
-          name: data.name,
-        }),
+      body: JSON.stringify({
+        insuranceType: data.insuranceType,
+        registration:
+          data.insuranceType === "Automóvel"
+            ? data.registration
+            : undefined,
+        name: data.name,
+        contact: data.contact,
+        website: data.website,
+      }),
       });
 
       const result = (await response.json()) as ApiResponse;

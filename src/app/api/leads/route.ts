@@ -14,6 +14,10 @@ import {
   type LeadRequest,
 } from "@/src/types/chat";
 
+import { leadRateLimit } from "@/src/lib/rate-limit";
+
+export const runtime = "nodejs";
+
 function isInsuranceType(value: unknown): value is InsuranceType {
   return (
     typeof value === "string" &&
@@ -22,10 +26,44 @@ function isInsuranceType(value: unknown): value is InsuranceType {
 }
 
 export async function POST(request: Request) {
+  const forwardedFor = request.headers.get("x-forwarded-for");
+
+  const ip =
+    forwardedFor?.split(",")[0]?.trim() ??
+    request.headers.get("x-real-ip") ??
+    "unknown";
+
+  const rateLimitResult = await leadRateLimit.limit(ip);
+
+  if (!rateLimitResult.success) {
+    return NextResponse.json<ApiResponse>(
+      {
+        success: false,
+        message:
+          "Foram enviados demasiados pedidos. Tente novamente dentro de alguns minutos.",
+      },
+      {
+        status: 429,
+        headers: {
+          "X-RateLimit-Limit":
+            rateLimitResult.limit.toString(),
+          "X-RateLimit-Remaining":
+            rateLimitResult.remaining.toString(),
+          "X-RateLimit-Reset":
+            rateLimitResult.reset.toString(),
+        },
+      },
+    );
+  }
+
   try {
     const body: unknown = await request.json();
 
-    if (!body || typeof body !== "object") {
+    if (
+      typeof body !== "object" ||
+      body === null ||
+      Array.isArray(body)
+    ) {
       return NextResponse.json<ApiResponse>(
         {
           success: false,
@@ -35,12 +73,24 @@ export async function POST(request: Request) {
       );
     }
 
-    const data = body as Record<string, unknown>;
+    const {
+      insuranceType,
+      registration,
+      contact,
+      name,
+      website,
+    } = body as Record<string, unknown>;
 
-    const insuranceType = data.insuranceType;
-    const registration = data.registration;
-    const contact = data.contact;
-    const name = data.name;
+    // Honeypot: utilizadores reais deixam este campo vazio.
+    if (
+      typeof website === "string" &&
+      website.trim() !== ""
+    ) {
+      return NextResponse.json<ApiResponse>({
+        success: true,
+        message: "O pedido foi recebido.",
+      });
+    }
 
     if (!isInsuranceType(insuranceType)) {
       return NextResponse.json<ApiResponse>(
@@ -52,17 +102,25 @@ export async function POST(request: Request) {
       );
     }
 
-    if (typeof name !== "string" || name.trim().length < 3) {
-  return Response.json(
-    {
-      success: false,
-      message: "O nome é inválido.",
-    },
-    { status: 400 },
-  );
-}
+    if (
+      typeof name !== "string" ||
+      name.trim().length < 3 ||
+      name.trim().length > 100
+    ) {
+      return NextResponse.json<ApiResponse>(
+        {
+          success: false,
+          message: "O nome é inválido.",
+        },
+        { status: 400 },
+      );
+    }
 
-    if (typeof contact !== "string" || !isValidPhone(contact)) {
+    if (
+      typeof contact !== "string" ||
+      contact.length > 30 ||
+      !isValidPhone(contact)
+    ) {
       return NextResponse.json<ApiResponse>(
         {
           success: false,
@@ -74,8 +132,10 @@ export async function POST(request: Request) {
 
     if (
       insuranceType === "Automóvel" &&
-      (typeof registration !== "string" ||
-        !isValidRegistration(registration))
+      (
+        typeof registration !== "string" ||
+        !isValidRegistration(registration)
+      )
     ) {
       return NextResponse.json<ApiResponse>(
         {
@@ -87,18 +147,17 @@ export async function POST(request: Request) {
     }
 
     const lead: LeadRequest = {
-
-      
       insuranceType,
+      name: normalizeName(name),
       contact: normalizePhone(contact),
-     name: normalizeName(name),
     };
 
     if (
       insuranceType === "Automóvel" &&
       typeof registration === "string"
     ) {
-      lead.registration = normalizeRegistration(registration);
+      lead.registration =
+        normalizeRegistration(registration);
     }
 
     await sendLeadEmail(lead);
