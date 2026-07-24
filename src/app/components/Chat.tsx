@@ -19,10 +19,21 @@ export default function Chat() {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({
-      behavior: "smooth",
-    });
-  }, [messages]);
+    const scrollToBottom = () => {
+      messagesEndRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "end",
+      });
+    };
+
+    scrollToBottom();
+
+    const timeout = window.setTimeout(scrollToBottom, 350);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [messages, step]);
 
   function getPlaceholder() {
     if (step === "registration") {
@@ -37,7 +48,9 @@ export default function Chat() {
   }
 
   const showInput =
-    step === "registration" || step === "contact" || step === "name";
+    step === "registration" ||
+    step === "contact" ||
+    step === "name";
 
   return (
     <section className="chat-card">
@@ -65,7 +78,10 @@ export default function Chat() {
           />
         )}
 
-        <div ref={messagesEndRef} />
+        <div
+          ref={messagesEndRef}
+          aria-hidden="true"
+        />
       </div>
 
       <footer className="chat-footer">
